@@ -1,6 +1,6 @@
 streamlit
 google-generativeai
-google-ai-generativelanguage==0.6.15
+google-ai-generativelanguage==0.6.5
 langchain
 langchain-core
 langchain-google-genai

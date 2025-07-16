@@ -1,30 +1,58 @@
-import streamlit as st
 import os
+import streamlit as st
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
+from langgraph.graph import StateGraph, END
 
-# -- Streamlit App Title --
+# -- Streamlit UI --
 st.set_page_config(page_title="Career Guidance Bot", page_icon="🎓")
 st.title("🎓 AI Career Guidance Bot")
 
-# -- SET API Key Directly (⚠️ Replace YOUR_API_KEY_HERE) --
-os.environ["GOOGLE_API_KEY"] = "AIzaSyAk9qhvZJqyV8uGCAmhDFcU9kovX7j8WLo"
-  # Replace this with your real Gemini API key
-llm = ChatGoogleGenerativeAI(model="models/gemini-1.5-flash-latest", temperature=0.3)
+# -- API Key (already included directly)
+api_key = "AIzaSyAk9qhvZJqyV8uGCAmhDFcU9kovX7j8WLo" # Add your own API Key
 
-# -- Form for User Input --
-with st.form("career_form"):
-    interests = st.text_input("👋 What subjects or fields excite you? (e.g., AI, art, biology)")
-    strengths = st.text_input("💪 What are your strengths? (e.g., logical thinking, creativity)")
-    preferences = st.text_input("🧠 What work style do you prefer? (e.g., solo, team, remote)")
-    goals = st.text_input("🎯 What are your learning goals? (e.g., job readiness, research)")
-    education = st.selectbox("🎓 Your current education level", ["High School", "Diploma", "Bachelor's", "Dropout", "Other"])
-    submitted = st.form_submit_button("Get Career Advice")
+# -- Input Form --
+with st.form("career_form_streamlit"):
+    interests = st.text_input("👋 What subjects or fields excite you most?")
+    strengths = st.text_input("💪 What are your strengths?")
+    preferences = st.text_input("🧠 What type of work do you prefer?")
+    goals = st.text_input("🎯 What are your learning goals?")
+    education = st.selectbox("🎓 What is your current education level?", 
+                             ["High school", "Diploma", "Bachelor's", "Dropout", "Other"])
+    submitted = st.form_submit_button("Submit & Get Advice")
 
-# -- Run LLM & Show Output --
+# -- Run only after form is submitted and inputs are valid --
 if submitted:
-    with st.spinner("🤖 Thinking... generating the best career for you..."):
-        try:
+    if not all([interests, strengths, preferences, goals, education]):
+        st.warning("⚠️ Please fill out all the fields.")
+    else:
+        # st.spinner(
+        #     "🤖 Making a career path suitable for you..."
+        # )
+        os.environ["GOOGLE_API_KEY"] = api_key
+        llm = ChatGoogleGenerativeAI(model="models/gemini-1.5-flash-latest", temperature=0.3)
+
+        def ask_interests(state: dict) -> dict:
+            state["interests"] = interests
+            return state
+
+        def ask_strengths(state: dict) -> dict:
+            state["strengths"] = strengths
+            return state
+
+        def ask_preferences(state: dict) -> dict:
+            state["preferences"] = preferences
+            return state
+
+        def ask_learning_goals(state: dict) -> dict:
+            state["goals"] = goals
+            return state
+
+        def ask_education_level(state: dict) -> dict:
+            state["education"] = education
+            return state
+
+        def generate_career_advice(state: dict) -> dict:
             prompt = (
                 "You are a smart, friendly career counselor helping students find their ideal career.\n"
                 "Based on the following user's inputs, suggest 1-2 best-fit career options. For each option, provide:\n"
@@ -34,22 +62,42 @@ if submitted:
                 "4. Key skills to master\n"
                 "5. Top companies or job roles they can aim for\n"
                 "6. Free or popular learning resources (platforms or courses)\n\n"
-                f"User Interests: {interests}\n"
-                f"User Strengths: {strengths}\n"
-                f"Work Preferences: {preferences}\n"
-                f"Learning Goals: {goals}\n"
-                f"Education Level: {education}\n\n"
+                f"User Interests: {state.get('interests')}\n"
+                f"User Strengths: {state.get('strengths')}\n"
+                f"Work Preferences: {state.get('preferences')}\n"
+                f"Learning Goals: {state.get('goals')}\n"
+                f"Education Level: {state.get('education')}\n\n"
                 "Respond in a helpful and structured way. Don't repeat the inputs."
             )
+            with st.spinner("🤖 Making a career path suitable for you..."):
+                try:
+                    response = llm.invoke([HumanMessage(content=prompt)])
+                    advice = response.content.strip()
+                    state["career_advice"] = advice
+                    st.success("✅ Career Suggestions Ready!")
+                    st.markdown("### 📋 Your Personalized Career Plan")
+                    st.markdown(advice)
+                except Exception as e:
+                    st.error("🚫 Error while generating response. Maybe token limit exceeded or API key is invalid.")
+                    st.code(str(e), language="text")
+                return state
 
-            response = llm.invoke([HumanMessage(content=prompt)])
-            advice = response.content.strip()
+        # LangGraph setup AFTER submit
+        builder = StateGraph(dict)
+        builder.set_entry_point("ask_interests")
+        builder.add_node("ask_interests", ask_interests)
+        builder.add_node("ask_strengths", ask_strengths)
+        builder.add_node("ask_preferences", ask_preferences)
+        builder.add_node("ask_learning_goals", ask_learning_goals)
+        builder.add_node("ask_education_level", ask_education_level)
+        builder.add_node("generate_career_advice", generate_career_advice)
 
-            st.success("✅ Career Suggestions Ready!")
-            st.markdown("### 📋 Your Personalized Career Plan")
-            st.markdown(advice)
+        builder.add_edge("ask_interests", "ask_strengths")
+        builder.add_edge("ask_strengths", "ask_preferences")
+        builder.add_edge("ask_preferences", "ask_learning_goals")
+        builder.add_edge("ask_learning_goals", "ask_education_level")
+        builder.add_edge("ask_education_level", "generate_career_advice")
+        builder.add_edge("generate_career_advice", END)
 
-        except Exception as e:
-            st.error("🚫 Oops! Looks like your Gemini API quota has been exceeded or the key is invalid.")
-            st.info("You can get a new API key from [Google AI Studio](https://makersuite.google.com/app/apikey) and try again.")
-            st.code(str(e), language="text")
+        graph = builder.compile()
+        graph.invoke({})  # Invoke after everything is ready
