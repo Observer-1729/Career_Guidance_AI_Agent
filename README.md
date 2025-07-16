@@ -18,8 +18,8 @@ This is an AI-powered career guidance assistant built using **Gemini Flash**, **
 ## 📥 Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/your-repo-name.git
-cd your-repo-name
+git clone https://github.com/Observer-1729/Career_Guidance_AI_Agent.git
+cd Career_Guidance_AI_Agent
 ```
 ▶️ How to Run
 Install dependencies (if not already installed):
@@ -43,3 +43,6 @@ Run the app
 
 streamlit run App.py
 ```
+## Online link for Deployed Website
+
+https://careerguidanceaiagent.streamlit.app
